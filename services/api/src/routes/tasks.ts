@@ -14,7 +14,6 @@ const StartRunParamsSchema = z.object({
 });
 
 const RunActionParamsSchema = z.object({
-  id: z.string().min(1),
   runId: z.string().min(1),
 });
 
@@ -63,10 +62,7 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/runs/:runId", async (request, reply) => {
-    const { runId } = RunActionParamsSchema.parse({
-      id: "",
-      ...(request.params as Record<string, string>),
-    });
+    const { runId } = RunActionParamsSchema.parse(request.params);
     const run = app.runtime.store.getRun(runId);
 
     if (!run) {
@@ -81,24 +77,22 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/runs/:runId/cancel", async (request, reply) => {
-    const { runId } = RunActionParamsSchema.parse({
-      id: "",
-      ...(request.params as Record<string, string>),
-    });
+    const { runId } = RunActionParamsSchema.parse(request.params);
+    const existingRun = app.runtime.store.getRun(runId);
+
+    if (!existingRun) {
+      return reply.notFound(`Run ${runId} was not found.`);
+    }
+
+    if (existingRun.tenantId !== request.requestContext.tenantId) {
+      return reply.forbidden("Run is outside the active tenant scope.");
+    }
 
     const run = app.runtime.store.updateRun(runId, (current) => ({
       ...current,
       status: "canceled",
       updatedAt: new Date().toISOString(),
     }));
-
-    if (!run) {
-      return reply.notFound(`Run ${runId} was not found.`);
-    }
-
-    if (run.tenantId !== request.requestContext.tenantId) {
-      return reply.forbidden("Run is outside the active tenant scope.");
-    }
 
     return { run };
   });
