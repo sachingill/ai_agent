@@ -19,7 +19,17 @@ const RunActionParamsSchema = z.object({
 
 export const taskRoutes: FastifyPluginAsync = async (app) => {
   app.post("/tasks", async (request, reply) => {
-    const body = CreateTaskBodySchema.parse(request.body);
+    const parsedBody = CreateTaskBodySchema.safeParse(request.body);
+
+    if (!parsedBody.success) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: parsedBody.error.issues,
+      });
+    }
+
+    const body = parsedBody.data;
     const { tenantId, userId } = request.requestContext;
 
     const task = app.runtime.store.createTask({
@@ -32,11 +42,34 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
       createdAt: new Date().toISOString(),
     });
 
+    app.runtime.audit.record({
+      tenantId,
+      actorSubjectId: userId,
+      eventType: "task.created",
+      targetKind: "task",
+      targetId: task.id,
+      payload: {
+        goal: task.goal,
+        sensitivity: task.sensitivity,
+        allowedTools: task.allowedTools,
+      },
+    });
+
     return reply.code(201).send({ task });
   });
 
   app.post("/tasks/:id/runs", async (request, reply) => {
-    const { id } = StartRunParamsSchema.parse(request.params);
+    const parsedParams = StartRunParamsSchema.safeParse(request.params);
+
+    if (!parsedParams.success) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: parsedParams.error.issues,
+      });
+    }
+
+    const { id } = parsedParams.data;
     const task = app.runtime.store.getTask(id);
 
     if (!task) {
@@ -58,11 +91,34 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
       updatedAt: now,
     });
 
+    app.runtime.audit.record({
+      tenantId: task.tenantId,
+      actorSubjectId: request.requestContext.userId,
+      eventType: "run.created",
+      runId: run.id,
+      targetKind: "run",
+      targetId: run.id,
+      payload: {
+        taskId: task.id,
+        status: run.status,
+      },
+    });
+
     return reply.code(201).send({ run });
   });
 
   app.get("/runs/:runId", async (request, reply) => {
-    const { runId } = RunActionParamsSchema.parse(request.params);
+    const parsedParams = RunActionParamsSchema.safeParse(request.params);
+
+    if (!parsedParams.success) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: parsedParams.error.issues,
+      });
+    }
+
+    const { runId } = parsedParams.data;
     const run = app.runtime.store.getRun(runId);
 
     if (!run) {
@@ -73,11 +129,33 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
       return reply.forbidden("Run is outside the active tenant scope.");
     }
 
+    app.runtime.audit.record({
+      tenantId: run.tenantId,
+      actorSubjectId: request.requestContext.userId,
+      eventType: "run.read",
+      runId: run.id,
+      targetKind: "run",
+      targetId: run.id,
+      payload: {
+        status: run.status,
+      },
+    });
+
     return { run };
   });
 
   app.post("/runs/:runId/cancel", async (request, reply) => {
-    const { runId } = RunActionParamsSchema.parse(request.params);
+    const parsedParams = RunActionParamsSchema.safeParse(request.params);
+
+    if (!parsedParams.success) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: parsedParams.error.issues,
+      });
+    }
+
+    const { runId } = parsedParams.data;
     const existingRun = app.runtime.store.getRun(runId);
 
     if (!existingRun) {
@@ -93,6 +171,20 @@ export const taskRoutes: FastifyPluginAsync = async (app) => {
       status: "canceled",
       updatedAt: new Date().toISOString(),
     }));
+
+    if (run) {
+      app.runtime.audit.record({
+        tenantId: run.tenantId,
+        actorSubjectId: request.requestContext.userId,
+        eventType: "run.canceled",
+        runId: run.id,
+        targetKind: "run",
+        targetId: run.id,
+        payload: {
+          status: run.status,
+        },
+      });
+    }
 
     return { run };
   });

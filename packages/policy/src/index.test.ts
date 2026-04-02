@@ -137,5 +137,66 @@ describe("policy engine", () => {
 
     expect(["allow", "deny", "require_approval"]).toContain(decision.decision);
   });
-});
 
+  it("denies execute and network actions for low-privilege or unmatched cases", () => {
+    const engine = createDefaultPolicyEngine();
+
+    const executeDecision = engine.evaluate({
+      ...baseInput,
+      action: "execute",
+      target: { kind: "tool", toolName: "shell" },
+    });
+
+    expect(executeDecision.decision).toBe("deny");
+
+    const viewerNetworkDecision = engine.evaluate({
+      actor: {
+        ...baseInput.actor,
+        roles: ["viewer"],
+      },
+      context: baseInput.context,
+      action: "network",
+      target: { kind: "domain", domain: "external.example.test" },
+    });
+
+    expect(viewerNetworkDecision.decision).toBe("deny");
+  });
+
+  it("denies unmatched file and domain targets when no explicit rule allows them", () => {
+    const engine = createPolicyEngine([
+      allowRoles({
+        id: "allow-specific-file-read",
+        description: "Only allow file reads for operators.",
+        reason: "Narrow file read allowlist.",
+        roles: ["operator"],
+        actions: ["read"],
+        targetKinds: ["file"],
+      }),
+      denyTargets({
+        id: "deny-external-domain",
+        description: "Block external network egress.",
+        reason: "External domains are denied by policy.",
+        actions: ["network"],
+        targetKinds: ["domain"],
+        targetNames: ["external.example.test"],
+      }),
+    ]);
+
+    const deniedDomain = engine.evaluate({
+      ...baseInput,
+      action: "network",
+      target: { kind: "domain", domain: "external.example.test" },
+    });
+
+    expect(deniedDomain.decision).toBe("deny");
+    expect(deniedDomain.matchedRuleIds).toEqual(["deny-external-domain"]);
+
+    const unmatchedExecute = engine.evaluate({
+      ...baseInput,
+      action: "execute",
+      target: { kind: "file", path: "/workspace/script.sh" },
+    });
+
+    expect(unmatchedExecute.decision).toBe("deny");
+  });
+});

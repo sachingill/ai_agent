@@ -96,4 +96,74 @@ describe("auth foundation", () => {
       role: "operator",
     });
   });
+
+  it("rejects inactive memberships and principal metadata mismatches", () => {
+    const inactiveMembership = createMembership({
+      tenantId: "tenant-1",
+      userId: "user-2",
+      role: "viewer",
+      isActive: false,
+      joinedAt: "2026-04-02T00:00:00.000Z",
+    });
+
+    expect(() => createPrincipal(inactiveMembership)).toThrow(/inactive/i);
+
+    const metadata = issueSessionMetadata({
+      sessionId: "session-3",
+      tenantId: "tenant-1",
+      userId: "user-1",
+      role: "operator",
+      authMethod: "sso",
+      issuer: "https://auth.example.test",
+      audience: "self-agent",
+      ttlMs: 60_000,
+      now: new Date("2026-04-02T00:00:00.000Z"),
+    });
+
+    const mismatchedPrincipal = {
+      ...principal,
+      tenantId: "tenant-2",
+    };
+
+    expect(() => createSessionContext(metadata, mismatchedPrincipal)).toThrow(/mismatch/i);
+  });
+
+  it("rejects invalid session TTLs and tenant mismatches during validation", () => {
+    expect(() =>
+      issueSessionMetadata({
+        sessionId: "session-4",
+        tenantId: "tenant-1",
+        userId: "user-1",
+        role: "operator",
+        authMethod: "sso",
+        issuer: "https://auth.example.test",
+        audience: "self-agent",
+        ttlMs: 0,
+      }),
+    ).toThrow(/ttlMs/i);
+
+    const metadata = issueSessionMetadata({
+      sessionId: "session-5",
+      tenantId: "tenant-1",
+      userId: "user-1",
+      role: "operator",
+      authMethod: "sso",
+      issuer: "https://auth.example.test",
+      audience: "self-agent",
+      ttlMs: 60_000,
+      now: new Date("2026-04-02T00:00:00.000Z"),
+    });
+
+    const session = createSessionContext(metadata, principal);
+    const mismatchedTenant = validateSession({
+      ...session,
+      metadata: {
+        ...session.metadata,
+        tenantId: "tenant-999",
+      },
+    });
+
+    expect(mismatchedTenant.valid).toBe(false);
+    expect(mismatchedTenant.reason).toBe("mismatched-tenant");
+  });
 });

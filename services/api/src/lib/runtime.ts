@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { createAuditRecorder } from "@self-agent/audit";
 import { InMemoryRunStore } from "./store.js";
 
 export const createRuntimeContext = () => ({
   store: new InMemoryRunStore(),
+  audit: createAuditRecorder(),
 });
 
 export type RuntimeContext = ReturnType<typeof createRuntimeContext>;

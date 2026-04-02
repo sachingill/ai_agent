@@ -81,6 +81,39 @@ describe("API bootstrap", () => {
 
     expect(cancelRunResponse.statusCode).toBe(200);
     expect(cancelRunResponse.json().run.status).toBe("canceled");
+
+    const tenantAuditResponse = await app.inject({
+      method: "GET",
+      url: "/audit",
+      headers: {
+        "x-tenant-id": "tenant-alpha",
+        "x-user-id": "user-123",
+      },
+    });
+
+    expect(tenantAuditResponse.statusCode).toBe(200);
+    expect(tenantAuditResponse.json().events.map((event: { eventType: string }) => event.eventType)).toEqual([
+      "task.created",
+      "run.created",
+      "run.read",
+      "run.canceled",
+    ]);
+
+    const runAuditResponse = await app.inject({
+      method: "GET",
+      url: `/audit?runId=${createdRun.id}`,
+      headers: {
+        "x-tenant-id": "tenant-alpha",
+        "x-user-id": "user-123",
+      },
+    });
+
+    expect(runAuditResponse.statusCode).toBe(200);
+    expect(runAuditResponse.json().events.map((event: { eventType: string }) => event.eventType)).toEqual([
+      "run.created",
+      "run.read",
+      "run.canceled",
+    ]);
   });
 
   it("rejects cross-tenant run access", async () => {
@@ -121,5 +154,89 @@ describe("API bootstrap", () => {
     });
 
     expect(fetchRunResponse.statusCode).toBe(403);
+  });
+
+  it("returns 404 for unknown task and run identifiers", async () => {
+    const app = await appPromise;
+
+    const createRunResponse = await app.inject({
+      method: "POST",
+      url: "/tasks/unknown-task/runs",
+      headers: {
+        "x-tenant-id": "tenant-alpha",
+        "x-user-id": "user-123",
+      },
+    });
+
+    expect(createRunResponse.statusCode).toBe(404);
+
+    const fetchRunResponse = await app.inject({
+      method: "GET",
+      url: "/runs/unknown-run",
+      headers: {
+        "x-tenant-id": "tenant-alpha",
+        "x-user-id": "user-123",
+      },
+    });
+
+    expect(fetchRunResponse.statusCode).toBe(404);
+
+    const cancelRunResponse = await app.inject({
+      method: "POST",
+      url: "/runs/unknown-run/cancel",
+      headers: {
+        "x-tenant-id": "tenant-alpha",
+        "x-user-id": "user-123",
+      },
+    });
+
+    expect(cancelRunResponse.statusCode).toBe(404);
+  });
+
+  it("returns 400 for malformed task payloads and run params", async () => {
+    const app = await appPromise;
+
+    const createTaskResponse = await app.inject({
+      method: "POST",
+      url: "/tasks",
+      payload: {
+        goal: "",
+        allowedTools: [""],
+        sensitivity: "critical",
+      },
+      headers: {
+        "x-tenant-id": "tenant-alpha",
+        "x-user-id": "user-123",
+      },
+    });
+
+    expect(createTaskResponse.statusCode).toBe(400);
+    expect(createTaskResponse.json().error).toBe("Bad Request");
+
+    const fetchRunResponse = await app.inject({
+      method: "GET",
+      url: "/runs//",
+      headers: {
+        "x-tenant-id": "tenant-alpha",
+        "x-user-id": "user-123",
+      },
+    });
+
+    expect([400, 404]).toContain(fetchRunResponse.statusCode);
+  });
+
+  it("rejects cross-tenant audit reads", async () => {
+    const app = await appPromise;
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/audit?tenantId=tenant-beta",
+      headers: {
+        "x-tenant-id": "tenant-alpha",
+        "x-user-id": "user-123",
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
   });
 });

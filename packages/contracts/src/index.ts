@@ -3,6 +3,7 @@ import { z } from "zod";
 export const IdentifierSchema = z.string().uuid();
 export const TimestampSchema = z.string().datetime({ offset: true });
 export const MetadataSchema = z.record(z.string(), z.unknown()).default({});
+export type Metadata = z.infer<typeof MetadataSchema>;
 
 export const RoleValues = [
   "owner",
@@ -257,8 +258,10 @@ export const AuditEventTypeValues = [
   "task.created",
   "task.updated",
   "run.created",
+  "run.read",
   "run.started",
   "run.paused",
+  "run.canceled",
   "run.completed",
   "run.failed",
   "step.created",
@@ -277,12 +280,12 @@ export type AuditEventType = z.infer<typeof AuditEventTypeSchema>;
 
 export const AuditEventSchema = z.object({
   id: IdentifierSchema,
-  tenantId: IdentifierSchema,
-  actorSubjectId: IdentifierSchema.optional(),
+  tenantId: z.string().min(1),
+  actorSubjectId: z.string().min(1).optional(),
   eventType: AuditEventTypeSchema,
   occurredAt: TimestampSchema,
-  runId: IdentifierSchema.optional(),
-  stepId: IdentifierSchema.optional(),
+  runId: z.string().min(1).optional(),
+  stepId: z.string().min(1).optional(),
   targetKind: z.string().min(1).max(80).optional(),
   targetId: z.string().min(1).max(255).optional(),
   payload: MetadataSchema,
