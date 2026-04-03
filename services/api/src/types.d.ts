@@ -10,6 +10,14 @@ declare module "fastify" {
       requestId: string;
       tenantId: string;
       userId: string;
+      roles: (
+        | "owner"
+        | "admin"
+        | "operator"
+        | "approver"
+        | "member"
+        | "viewer"
+      )[];
     };
   }
 }

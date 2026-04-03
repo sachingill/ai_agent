@@ -198,7 +198,7 @@ export const createDefaultPolicyEngine = () =>
     allowRoles({
       id: "allow-admin-approve",
       description: "Allow approvers and admins to approve pending actions.",
-      priority: 30,
+      priority: 95,
       reason: "Approval-capable roles may resolve gated actions.",
       roles: ["approver", "admin", "owner"],
       actions: ["approve"],

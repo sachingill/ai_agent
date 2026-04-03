@@ -3,6 +3,7 @@ import sensible from "@fastify/sensible";
 import { ZodError } from "zod";
 
 import { registerDecorators } from "./lib/runtime.js";
+import { approvalRoutes } from "./routes/approvals.js";
 import { auditRoutes } from "./routes/audit.js";
 import { healthRoutes } from "./routes/health.js";
 import { taskRoutes } from "./routes/tasks.js";
@@ -14,6 +15,7 @@ export const buildApp = async () => {
 
   await app.register(sensible);
   await registerDecorators(app);
+  await app.register(approvalRoutes);
   await app.register(healthRoutes);
   await app.register(auditRoutes);
   await app.register(taskRoutes);
