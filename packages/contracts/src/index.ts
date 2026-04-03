@@ -218,17 +218,17 @@ export const PolicyTargetSchema = z.discriminatedUnion("kind", [
 export type PolicyTarget = z.infer<typeof PolicyTargetSchema>;
 
 export const PolicyActorSchema = z.object({
-  tenantId: IdentifierSchema,
-  subjectId: IdentifierSchema,
+  tenantId: z.string().min(1),
+  subjectId: z.string().min(1),
   roles: z.array(RoleSchema).min(1),
   authMethod: AuthMethodSchema.optional(),
 });
 export type PolicyActor = z.infer<typeof PolicyActorSchema>;
 
 export const PolicyContextSchema = z.object({
-  requestId: IdentifierSchema.optional(),
-  runId: IdentifierSchema.optional(),
-  stepId: IdentifierSchema.optional(),
+  requestId: z.string().min(1).optional(),
+  runId: z.string().min(1).optional(),
+  stepId: z.string().min(1).optional(),
   environment: z.enum(["dev", "staging", "prod"]).default("dev"),
   taskSensitivity: TaskSensitivitySchema.optional(),
   tags: z.array(z.string().min(1)).default([]),
