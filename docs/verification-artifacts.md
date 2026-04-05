@@ -170,6 +170,7 @@ These are not implemented yet, but should be added for the next slice:
 
 - [docs/secure-openclaw-plan.md](/Users/sachingill/project/SelfAgent/docs/secure-openclaw-plan.md)
 - [docs/verification-artifacts.md](/Users/sachingill/project/SelfAgent/docs/verification-artifacts.md)
+- [docs/launch-readiness-checklist.md](/Users/sachingill/project/SelfAgent/docs/launch-readiness-checklist.md)
 
 ### Code Artifacts
 
