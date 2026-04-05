@@ -6,6 +6,7 @@ import { registerDecorators } from "./lib/runtime.js";
 import { approvalRoutes } from "./routes/approvals.js";
 import { auditRoutes } from "./routes/audit.js";
 import { healthRoutes } from "./routes/health.js";
+import { reportingRoutes } from "./routes/reporting.js";
 import { taskRoutes } from "./routes/tasks.js";
 
 export const buildApp = async () => {
@@ -17,6 +18,7 @@ export const buildApp = async () => {
   await registerDecorators(app);
   await app.register(approvalRoutes);
   await app.register(healthRoutes);
+  await app.register(reportingRoutes);
   await app.register(auditRoutes);
   await app.register(taskRoutes);
 

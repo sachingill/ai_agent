@@ -569,4 +569,166 @@ describe("API bootstrap", () => {
 
     expect(approveAgainResponse.statusCode).toBe(409);
   });
+
+  it("returns run summaries with approvals, blockers, validation, and artifact links", async () => {
+    const app = await appPromise;
+
+    const createTaskResponse = await app.inject({
+      method: "POST",
+      url: "/tasks",
+      payload: {
+        goal: "Prepare summary report for a blocked launch run.",
+        allowedTools: ["browser.read", "shell.exec"],
+        sensitivity: "high",
+      },
+      headers: {
+        "x-tenant-id": "tenant-summary",
+        "x-user-id": "user-requester",
+      },
+    });
+
+    const task = createTaskResponse.json().task;
+    const createRunResponse = await app.inject({
+      method: "POST",
+      url: `/tasks/${task.id}/runs`,
+      headers: {
+        "x-tenant-id": "tenant-summary",
+        "x-user-id": "user-requester",
+      },
+    });
+    const run = createRunResponse.json().run;
+
+    await app.inject({
+      method: "POST",
+      url: `/runs/${run.id}/approvals`,
+      payload: {
+        summary: "Approve shell.exec for launch smoke test",
+        actionType: "execute",
+      },
+      headers: {
+        "x-tenant-id": "tenant-summary",
+        "x-user-id": "user-requester",
+      },
+    });
+
+    app.runtime.audit.record({
+      tenantId: "tenant-summary",
+      actorSubjectId: "user-requester",
+      eventType: "tool.completed",
+      runId: run.id,
+      targetKind: "tool",
+      targetId: "shell.exec",
+      payload: {
+        artifact: {
+          title: "Smoke Test Output",
+          kind: "log",
+          url: "https://artifacts.local/smoke-test.log",
+        },
+      },
+    });
+
+    const summaryResponse = await app.inject({
+      method: "GET",
+      url: `/runs/${run.id}/summary`,
+      headers: {
+        "x-tenant-id": "tenant-summary",
+        "x-user-id": "user-requester",
+      },
+    });
+
+    expect(summaryResponse.statusCode).toBe(200);
+    expect(summaryResponse.json().summary.artifacts[0].title).toBe("Smoke Test Output");
+    expect(summaryResponse.json().summary.blockers[0].type).toBe("approval");
+    expect(summaryResponse.json().validation.decision).toBe("approval_needed");
+
+    const progressReportResponse = await app.inject({
+      method: "GET",
+      url: `/runs/${run.id}/report?kind=progress`,
+      headers: {
+        "x-tenant-id": "tenant-summary",
+        "x-user-id": "user-requester",
+      },
+    });
+
+    expect(progressReportResponse.statusCode).toBe(200);
+    expect(progressReportResponse.json().report.kind).toBe("progress");
+    expect(progressReportResponse.json().report.approvalsPending).toBe(1);
+  });
+
+  it("returns final reports for completed runs and rejects cross-tenant reporting access", async () => {
+    const app = await appPromise;
+
+    const createTaskResponse = await app.inject({
+      method: "POST",
+      url: "/tasks",
+      payload: {
+        goal: "Prepare final report for completed run.",
+        allowedTools: ["browser.read"],
+        sensitivity: "medium",
+      },
+      headers: {
+        "x-tenant-id": "tenant-report",
+        "x-user-id": "user-requester",
+      },
+    });
+
+    const task = createTaskResponse.json().task;
+    const createRunResponse = await app.inject({
+      method: "POST",
+      url: `/tasks/${task.id}/runs`,
+      headers: {
+        "x-tenant-id": "tenant-report",
+        "x-user-id": "user-requester",
+      },
+    });
+    const run = createRunResponse.json().run;
+
+    app.runtime.store.updateRun(run.id, (current) => ({
+      ...current,
+      status: "completed",
+      updatedAt: "2026-04-05T06:00:00.000Z",
+    }));
+
+    app.runtime.audit.record({
+      tenantId: "tenant-report",
+      actorSubjectId: "user-requester",
+      eventType: "tool.completed",
+      runId: run.id,
+      targetKind: "tool",
+      targetId: "browser.read",
+      payload: {
+        artifacts: [
+          {
+            title: "Trace Bundle",
+            kind: "trace",
+            url: "https://artifacts.local/trace.zip",
+          },
+        ],
+      },
+    });
+
+    const finalReportResponse = await app.inject({
+      method: "GET",
+      url: `/runs/${run.id}/report?kind=final`,
+      headers: {
+        "x-tenant-id": "tenant-report",
+        "x-user-id": "user-requester",
+      },
+    });
+
+    expect(finalReportResponse.statusCode).toBe(200);
+    expect(finalReportResponse.json().report.kind).toBe("final");
+    expect(finalReportResponse.json().report.artifacts[0]).toContain("Trace Bundle");
+
+    const crossTenantResponse = await app.inject({
+      method: "GET",
+      url: `/runs/${run.id}/summary`,
+      headers: {
+        "x-tenant-id": "tenant-other",
+        "x-user-id": "user-requester",
+      },
+    });
+
+    expect(crossTenantResponse.statusCode).toBe(403);
+  });
 });
